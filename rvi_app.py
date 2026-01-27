@@ -21,32 +21,46 @@ warnings.filterwarnings(
     module="matplotlib"
 )
 
-st.set_page_config(page_title="Risk Vibe Indicator (RVI) Dashboard", layout="wide")
+st.set_page_config(
+    page_title="Risk Vibe Indicator (RVI) Dashboard", layout="wide")
 sns.set(style="whitegrid")
 mpl.rcParams["axes.unicode_minus"] = False
 mpl.rcParams["pdf.fonttype"] = 42
 mpl.rcParams["ps.fonttype"] = 42
 
-def try_set_microsoft_jhenghei():
-    """嘗試載入系統微軟正黑體並設為全域字型。"""
-    msjh = r"C:\Windows\Fonts\msjh.ttc"
-    if os.path.exists(msjh):
-        try:
-            fm.fontManager.addfont(msjh)
-            fm._load_fontmanager(try_read_cache=False)
-            font_name = fm.FontProperties(fname=msjh).get_name()
-            mpl.rcParams["font.family"] = font_name
-            mpl.rcParams["font.sans-serif"] = [font_name]
-            return f"已載入字型：{font_name}"
-        except Exception as e:
-            return f"載入微軟正黑體失敗：{e}"
-    return "找不到系統微軟正黑體（msjh.ttc），可在側邊欄上傳字型檔。"
 
-font_msg = try_set_microsoft_jhenghei()
+def try_set_chinese_font():
+    """嘗試載入中文字型（優先使用專案內字型，再嘗試系統字型）。"""
+    # 優先順序：專案內字型 > Windows 系統字型 > Linux 系統字型
+    font_paths = [
+        "NotoSansTC-Regular.ttf",  # 專案根目錄的字型檔（需自行下載放置）
+        r"C:\Windows\Fonts\msjh.ttc",  # Windows 微軟正黑體
+        "/usr/share/fonts/truetype/wqy/wqy-microhei.ttc",  # Linux 文泉驿微米黑
+        "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",  # Linux Noto Sans CJK
+    ]
+
+    for font_path in font_paths:
+        if os.path.exists(font_path):
+            try:
+                fm.fontManager.addfont(font_path)
+                fm._load_fontmanager(try_read_cache=False)
+                font_name = fm.FontProperties(fname=font_path).get_name()
+                mpl.rcParams["font.family"] = font_name
+                mpl.rcParams["font.sans-serif"] = [font_name]
+                return f"✅ 已載入字型：{font_name}（{os.path.basename(font_path)}）"
+            except Exception as e:
+                continue  # 載入失敗，嘗試下一個字型
+
+    return "⚠️ 未找到中文字型，圖表中文可能顯示為方框。請下載 NotoSansTC-Regular.ttf 並放置於專案根目錄，或在側邊欄上傳字型檔。"
+
+
+font_msg = try_set_chinese_font()
 
 # -------------------------
 # 工具函式
 # -------------------------
+
+
 def normalize_minmax(series: pd.Series) -> pd.Series:
     s = series.astype(float)
     mn, mx = np.nanmin(s), np.nanmax(s)
@@ -54,12 +68,14 @@ def normalize_minmax(series: pd.Series) -> pd.Series:
         return pd.Series(np.zeros(len(s)), index=s.index)
     return (s - mn) / (mx - mn)
 
+
 def apply_direction(series: pd.Series, larger_is_worse: bool) -> pd.Series:
     """
     方向一致化：回傳「數值越大 = 越糟」的尺度
     如果 larger_is_worse=False，代表數值越大越好 → 先乘以 -1 反向，再做正規化
     """
     return series if larger_is_worse else -series
+
 
 def heat_to_vibe(h: float) -> str:
     if h < 0.25:
@@ -71,6 +87,7 @@ def heat_to_vibe(h: float) -> str:
     else:
         return "🔴 Critical"
 
+
 def vibe_color(vibe: str) -> str:
     mapping = {
         "🟢 Calm": "#10B981",     # 綠
@@ -80,9 +97,11 @@ def vibe_color(vibe: str) -> str:
     }
     return mapping.get(vibe, "#6B7280")
 
+
 @st.cache_data
 def load_excel(file_bytes: bytes, sheet: str | int | None = None) -> pd.DataFrame:
     return pd.read_excel(io.BytesIO(file_bytes), sheet_name=sheet, engine="openpyxl")
+
 
 def to_bytes_png(fig) -> bytes:
     buf = io.BytesIO()
@@ -90,9 +109,11 @@ def to_bytes_png(fig) -> bytes:
     buf.seek(0)
     return buf.getvalue()
 
+
 def build_template_df(n_days: int = 30) -> pd.DataFrame:
     rng = np.random.default_rng(42)
-    dates = pd.date_range((pd.Timestamp.today() - pd.Timedelta(days=n_days)).normalize(), periods=n_days, freq="D")
+    dates = pd.date_range((pd.Timestamp.today(
+    ) - pd.Timedelta(days=n_days)).normalize(), periods=n_days, freq="D")
 
     df = pd.DataFrame({
         "date": dates,
@@ -103,6 +124,7 @@ def build_template_df(n_days: int = 30) -> pd.DataFrame:
         "ews_score": np.clip(rng.normal(50, 10, len(dates)), 10, 100)
     })
     return df
+
 
 def universal_date_parser(series):
     """
@@ -128,7 +150,7 @@ def universal_date_parser(series):
         if isinstance(x, (int, float)) and not pd.isna(x):
             x_int = int(x)
             # Excel serial 判斷：小於 300000 （依 Excel epoch）
-            if x_int < 300000:  
+            if x_int < 300000:
                 try:
                     return (pd.Timestamp("1899-12-30") + pd.Timedelta(days=x_int)).strftime("%Y-%m-%d")
                 except:
@@ -163,13 +185,15 @@ def universal_date_parser(series):
 
     return s
 
+
 # -------------------------
 # 側邊欄：資料、字型、欄位對映、方向、權重
 # -------------------------
 st.sidebar.header("📤 資料來源 & 字型")
 uploaded = st.sidebar.file_uploader("上傳 Excel（.xlsx）", type=["xlsx"])
 sheet_name = st.sidebar.text_input("指定工作表名稱（留空則第一張）", "")
-font_file = st.sidebar.file_uploader("（可選）上傳中文字型檔 .ttf/.otf/.ttc", type=["ttf", "otf", "ttc"])
+font_file = st.sidebar.file_uploader(
+    "（可選）上傳中文字型檔 .ttf/.otf/.ttc", type=["ttf", "otf", "ttc"])
 
 if font_file is not None:
     try:
@@ -195,7 +219,8 @@ st.sidebar.info(font_msg)
 # 讀資料（支援自動偵測或手動指定工作表）
 if uploaded:
     try:
-        raw = load_excel(uploaded.getvalue(), sheet=sheet_name if sheet_name.strip() else None)
+        raw = load_excel(uploaded.getvalue(),
+                         sheet=sheet_name if sheet_name.strip() else None)
 
         # 若回傳 dict（多工作表），取第一張或你指定的 sheet
         if isinstance(raw, dict):
@@ -216,12 +241,15 @@ else:
 # 日期欄位與指標選取
 st.sidebar.header("🧭 欄位對映與方向")
 all_cols = df_raw.columns.tolist()
-date_col = st.sidebar.selectbox("日期欄位", options=all_cols, index=all_cols.index("date") if "date" in all_cols else 0)
+date_col = st.sidebar.selectbox("日期欄位", options=all_cols, index=all_cols.index(
+    "date") if "date" in all_cols else 0)
 
 # 指標候選（排除日期欄）
 metric_candidates = [c for c in all_cols if c != date_col]
-default_metrics = [m for m in ["pd", "npl", "var", "liquidity_gap", "ews_score"] if m in metric_candidates]
-metrics = st.sidebar.multiselect("指標欄位（可多選）", options=metric_candidates, default=default_metrics or metric_candidates)
+default_metrics = [m for m in ["pd", "npl", "var",
+                               "liquidity_gap", "ews_score"] if m in metric_candidates]
+metrics = st.sidebar.multiselect(
+    "指標欄位（可多選）", options=metric_candidates, default=default_metrics or metric_candidates)
 
 if len(metrics) == 0:
     st.error("請至少選擇一個指標欄位。")
@@ -234,9 +262,11 @@ st.sidebar.markdown("**指標方向與權重**")
 for m in metrics:
     cols = st.sidebar.columns([1, 1.2])
     with cols[0]:
-        dir_cols[m] = st.checkbox(f"{m} 越大越糟？", value=(m != "liquidity_gap"))  # 預設 liquidity_gap 反向
+        dir_cols[m] = st.checkbox(f"{m} 越大越糟？", value=(
+            m != "liquidity_gap"))  # 預設 liquidity_gap 反向
     with cols[1]:
-        w_cols[m] = st.slider(f"{m} 權重", min_value=0.0, max_value=1.0, value=0.2, step=0.01, key=f"w_{m}")
+        w_cols[m] = st.slider(
+            f"{m} 權重", min_value=0.0, max_value=1.0, value=0.2, step=0.01, key=f"w_{m}")
 
 # 權重正規化
 w_sum = sum(w_cols.values())
@@ -289,11 +319,16 @@ df["risk_heat"] = risk_heat
 # Vibe 門檻
 if threshold_mode.startswith("歷史分位數"):
     q25, q50, q75 = df["risk_heat"].quantile([0.25, 0.5, 0.75]).tolist()
+
     def heat_to_vibe_quantile(h):
-        if h < q25: return "🟢 Calm"
-        elif h < q50: return "🟡 Neutral"
-        elif h < q75: return "🟠 Alert"
-        else: return "🔴 Critical"
+        if h < q25:
+            return "🟢 Calm"
+        elif h < q50:
+            return "🟡 Neutral"
+        elif h < q75:
+            return "🟠 Alert"
+        else:
+            return "🔴 Critical"
     df["vibe"] = df["risk_heat"].apply(heat_to_vibe_quantile)
 else:
     df["vibe"] = df["risk_heat"].apply(heat_to_vibe)
@@ -320,7 +355,8 @@ with kpi3:
 
 # ---- 圖 1：色帶圖 ----
 fig1, ax1 = plt.subplots(figsize=(10, 2.2))
-ax1.bar(df[date_col].dt.strftime("%Y-%m-%d"), [1]*len(df), color=df["color"], edgecolor="none")
+ax1.bar(df[date_col].dt.strftime("%Y-%m-%d"), [1] *
+        len(df), color=df["color"], edgecolor="none")
 ax1.set_yticks([])
 ax1.set_title("Bank Risk Vibe Indicator（每日氛圍色帶）")
 plt.xticks(rotation=75, ha="right")
@@ -334,17 +370,22 @@ fig2, ax2 = plt.subplots(figsize=(10, 4))
 # 背景區間
 if threshold_mode.startswith("歷史分位數"):
     ax2.axhspan(0.0, df["risk_heat"].min(), facecolor="#10B981", alpha=0.08)
-    ax2.axhspan(df["risk_heat"].min(), df["risk_heat"].quantile(0.25), facecolor="#10B981", alpha=0.12, label="Calm")
-    ax2.axhspan(df["risk_heat"].quantile(0.25), df["risk_heat"].quantile(0.5), facecolor="#F59E0B", alpha=0.12, label="Neutral")
-    ax2.axhspan(df["risk_heat"].quantile(0.5), df["risk_heat"].quantile(0.75), facecolor="#EF4444", alpha=0.10, label="Alert")
-    ax2.axhspan(df["risk_heat"].quantile(0.75), 1.0, facecolor="#7F1D1D", alpha=0.10, label="Critical")
+    ax2.axhspan(df["risk_heat"].min(), df["risk_heat"].quantile(
+        0.25), facecolor="#10B981", alpha=0.12, label="Calm")
+    ax2.axhspan(df["risk_heat"].quantile(0.25), df["risk_heat"].quantile(
+        0.5), facecolor="#F59E0B", alpha=0.12, label="Neutral")
+    ax2.axhspan(df["risk_heat"].quantile(0.5), df["risk_heat"].quantile(
+        0.75), facecolor="#EF4444", alpha=0.10, label="Alert")
+    ax2.axhspan(df["risk_heat"].quantile(0.75), 1.0,
+                facecolor="#7F1D1D", alpha=0.10, label="Critical")
 else:
     ax2.axhspan(0.00, 0.25, facecolor="#10B981", alpha=0.12, label="Calm")
     ax2.axhspan(0.25, 0.50, facecolor="#F59E0B", alpha=0.12, label="Neutral")
     ax2.axhspan(0.50, 0.75, facecolor="#EF4444", alpha=0.10, label="Alert")
     ax2.axhspan(0.75, 1.00, facecolor="#7F1D1D", alpha=0.10, label="Critical")
 
-ax2.plot(df[date_col], df["risk_heat"], color="#111827", linewidth=2, marker="o", markersize=4)
+ax2.plot(df[date_col], df["risk_heat"], color="#111827",
+         linewidth=2, marker="o", markersize=4)
 ax2.set_ylim(0, 1)
 ax2.set_ylabel("Risk Heat（0~1）")
 ax2.set_title("Risk Heat 趨勢（含 Vibe 區間）")
@@ -375,11 +416,14 @@ with col_d1:
     st.download_button("⬇️ 下載處理後 CSV", data=out_csv.to_csv(index=False).encode("utf-8-sig"),
                        file_name="risk_vibe_result.csv", mime="text/csv")
 with col_d2:
-    st.download_button("⬇️ 色帶圖 PNG", data=img1, file_name="risk_vibe_band.png", mime="image/png")
+    st.download_button("⬇️ 色帶圖 PNG", data=img1,
+                       file_name="risk_vibe_band.png", mime="image/png")
 with col_d3:
-    st.download_button("⬇️ 趨勢圖 PNG", data=img2, file_name="risk_heat_trend.png", mime="image/png")
+    st.download_button("⬇️ 趨勢圖 PNG", data=img2,
+                       file_name="risk_heat_trend.png", mime="image/png")
 with col_d4:
-    st.download_button("⬇️ 貢獻度圖 PNG", data=img3, file_name="risk_heat_contrib.png", mime="image/png")
+    st.download_button("⬇️ 貢獻度圖 PNG", data=img3,
+                       file_name="risk_heat_contrib.png", mime="image/png")
 
 st.divider()
 
