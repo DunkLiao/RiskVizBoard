@@ -77,7 +77,17 @@ warnings.filterwarnings(
 )
 
 st.set_page_config(
-    page_title="Risk Vibe Indicator (RVI) Dashboard", layout="wide")
+    page_title="Risk Vibe Indicator (RI) Dashboard", layout="wide")
+
+# 顯示商標
+if os.path.exists("logo.png"):
+    col_logo, col_title = st.columns([1, 5])
+    with col_logo:
+        st.image("logo.png", width=120)
+    with col_title:
+        st.markdown("<h1 style='margin-top: 20px;'>Risk Vibe Indicator (RI) Dashboard</h1>", unsafe_allow_html=True)
+else:
+    st.title("Risk Vibe Indicator (RI) Dashboard")
 
 # 注入全域CSS樣式（在所有其他Streamlit調用前執行）
 GLOBAL_CSS = f"""
@@ -336,7 +346,7 @@ sheet_name = st.sidebar.text_input("指定工作表名稱（留空則第一張�
 
 with st.sidebar.expander("⚙️ 一般設定", expanded=True):
     threshold_mode = st.radio(
-        "Vibe 門檻模式",
+        "風險等級門檻模式",
         ["固定分段（0.25/0.5/0.75）", "歷史分位數（25%/50%/75%）"],
         index=0
     )
@@ -449,7 +459,7 @@ st.sidebar.caption("（權重會自動正規化為總和=1）")
 # 頁面標題 & 說明
 st.markdown(f"""
 <div style='border-bottom: 3px solid {COLOR_SCHEME['ui']['primary']}; padding-bottom: 16px; margin-bottom: 24px;'>
-    <h1 style='margin: 0; color: {COLOR_SCHEME['ui']['primary']};'>📊 Risk Vibe Indicator (RVI) Dashboard</h1>
+    <h1 style='margin: 0; color: {COLOR_SCHEME['ui']['primary']};'>📊 Risk Indicator (RI) Dashboard</h1>
     <p style='margin: 8px 0 0 0; color: {COLOR_SCHEME['ui']['secondary']['dark_gray']};'>上傳 Excel → 對映欄位 → 設定方向/權重 → 即時出圖與匯出</p>
 </div>
 """, unsafe_allow_html=True)
@@ -590,7 +600,7 @@ with kpi_col3:
         text-align: center;
         box-shadow: 0 2px 4px rgba(0,0,0,0.05);
     '>
-        <div style='color: {COLOR_SCHEME['ui']['secondary']['dark_gray']}; font-size: 14px; font-weight: 600; margin-bottom: 8px;'>當前 Vibe</div>
+        <div style='color: {COLOR_SCHEME['ui']['secondary']['dark_gray']}; font-size: 14px; font-weight: 600; margin-bottom: 8px;'>當前風險等級</div>
         <div style='background-color: {vibe_bg}; color: {COLOR_SCHEME['ui']['secondary']['white']}; padding: 8px 16px; border-radius: 6px; font-size: 18px; font-weight: 700; display: inline-block;'>{vibe_label}</div>
     </div>
     """, unsafe_allow_html=True)
@@ -598,7 +608,7 @@ with kpi_col3:
 st.markdown("")  # 空行分隔
 
 # ---- 圖 1：色帶圖（卡片） ----
-st.markdown("### 📊 Bank Risk Vibe Indicator（每日氛圍色帶）")
+st.markdown("### 📊 Bank Risk Indicator（每日氛圍色帶）")
 st.markdown(
     f"<div style='background-color: {COLOR_SCHEME['ui']['secondary']['white']}; border: 1px solid {COLOR_SCHEME['ui']['secondary']['light_gray']}; border-radius: 8px; padding: 16px;'>", unsafe_allow_html=True)
 
@@ -623,7 +633,7 @@ plt.close(fig1)
 st.markdown("</div>", unsafe_allow_html=True)
 
 # ---- 圖 2：熱度趨勢（卡片） ----
-st.markdown("### 📈 Risk Heat 趨勢（含 Vibe 區間）")
+st.markdown("### 📈 Risk Heat 趨勢（含風險等級區間）")
 st.markdown(
     f"<div style='background-color: {COLOR_SCHEME['ui']['secondary']['white']}; border: 1px solid {COLOR_SCHEME['ui']['secondary']['light_gray']}; border-radius: 8px; padding: 16px;'>", unsafe_allow_html=True)
 
