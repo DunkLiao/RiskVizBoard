@@ -77,7 +77,7 @@ warnings.filterwarnings(
 )
 
 st.set_page_config(
-    page_title="Risk Vibe Indicator (RI) Dashboard", layout="wide")
+    page_title="Risk Indicator (RI) Dashboard", layout="wide")
 
 # 顯示商標
 if os.path.exists("logo.png"):
@@ -85,9 +85,9 @@ if os.path.exists("logo.png"):
     with col_logo:
         st.image("logo.png", width=120)
     with col_title:
-        st.markdown("<h1 style='margin-top: 20px;'>Risk Vibe Indicator (RI) Dashboard</h1>", unsafe_allow_html=True)
+        st.markdown("<h1 style='margin-top: 20px;'>Risk Indicator (RI) Dashboard</h1>", unsafe_allow_html=True)
 else:
-    st.title("Risk Vibe Indicator (RI) Dashboard")
+    st.title("Risk Indicator (RI) Dashboard")
 
 # 注入全域CSS樣式（在所有其他Streamlit調用前執行）
 GLOBAL_CSS = f"""
@@ -720,14 +720,14 @@ with col_d1:
     st.download_button(
         label="⬇️ CSV 分析結果",
         data=out_csv.to_csv(index=False).encode("utf-8-sig"),
-        file_name="risk_vibe_result.csv",
+        file_name="risk_result.csv",
         mime="text/csv"
     )
 with col_d2:
     st.download_button(
         label="⬇️ 色帶圖",
         data=img1,
-        file_name="risk_vibe_band.png",
+        file_name="risk_band.png",
         mime="image/png"
     )
 with col_d3:
