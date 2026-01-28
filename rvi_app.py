@@ -63,6 +63,9 @@ font_msg = try_set_chinese_font()
 
 def normalize_minmax(series: pd.Series) -> pd.Series:
     s = series.astype(float)
+    # 檢查是否為空陣列或全為 NaN
+    if len(s) == 0 or s.isna().all():
+        return pd.Series(np.zeros(len(s)), index=s.index)
     mn, mx = np.nanmin(s), np.nanmax(s)
     if np.isclose(mx - mn, 0):
         return pd.Series(np.zeros(len(s)), index=s.index)
@@ -192,19 +195,6 @@ def universal_date_parser(series):
 st.sidebar.header("📤 資料來源 & 字型")
 uploaded = st.sidebar.file_uploader("上傳 Excel（.xlsx）", type=["xlsx"])
 sheet_name = st.sidebar.text_input("指定工作表名稱（留空則第一張）", "")
-font_file = st.sidebar.file_uploader(
-    "（可選）上傳中文字型檔 .ttf/.otf/.ttc", type=["ttf", "otf", "ttc"])
-
-if font_file is not None:
-    try:
-        fm.fontManager.addfont(font_file)
-        fm._load_fontmanager(try_read_cache=False)
-        font_name = fm.FontProperties(fname=font_file).get_name()
-        mpl.rcParams["font.family"] = font_name
-        mpl.rcParams["font.sans-serif"] = [font_name]
-        font_msg = f"已改用上傳的字型：{font_name}"
-    except Exception as e:
-        font_msg = f"上傳字型載入失敗：{e}"
 
 with st.sidebar.expander("⚙️ 一般設定", expanded=True):
     threshold_mode = st.radio(
@@ -241,15 +231,40 @@ else:
 # 日期欄位與指標選取
 st.sidebar.header("🧭 欄位對映與方向")
 all_cols = df_raw.columns.tolist()
-date_col = st.sidebar.selectbox("日期欄位", options=all_cols, index=all_cols.index(
-    "date") if "date" in all_cols else 0)
 
-# 指標候選（排除日期欄）
+# 智能偵測日期欄位
+date_col_candidates = [c for c in all_cols if any(
+    keyword in str(c).lower() for keyword in ["date", "日期", "時間"])]
+default_date_idx = all_cols.index(
+    date_col_candidates[0]) if date_col_candidates else 0
+date_col = st.sidebar.selectbox(
+    "日期欄位", options=all_cols, index=default_date_idx)
+
+# 指標候選（排除日期欄與非數值欄位）
 metric_candidates = [c for c in all_cols if c != date_col]
-default_metrics = [m for m in ["pd", "npl", "var",
-                               "liquidity_gap", "ews_score"] if m in metric_candidates]
+
+# 智能偵測數值欄位作為預設指標
+numeric_cols = []
+for col in metric_candidates:
+    try:
+        # 嘗試轉換前幾筆資料，判斷是否為數值欄位
+        test_series = pd.to_numeric(df_raw[col].head(10), errors='coerce')
+        # 檢查轉換後至少有一半以上的資料是有效數字
+        valid_count = test_series.notna().sum()
+        if valid_count >= len(test_series) * 0.5:
+            numeric_cols.append(col)
+    except:
+        pass
+
+# 如果沒有找到數值欄位，顯示警告
+if not numeric_cols:
+    st.sidebar.warning("⚠️ 未自動偵測到數值欄位，請手動選擇。")
+    default_metrics = []
+else:
+    default_metrics = numeric_cols
+
 metrics = st.sidebar.multiselect(
-    "指標欄位（可多選）", options=metric_candidates, default=default_metrics or metric_candidates)
+    "指標欄位（可多選）", options=metric_candidates, default=default_metrics)
 
 if len(metrics) == 0:
     st.error("請至少選擇一個指標欄位。")
@@ -262,11 +277,13 @@ st.sidebar.markdown("**指標方向與權重**")
 for m in metrics:
     cols = st.sidebar.columns([1, 1.2])
     with cols[0]:
-        dir_cols[m] = st.checkbox(f"{m} 越大越糟？", value=(
-            m != "liquidity_gap"))  # 預設 liquidity_gap 反向
+        # 智能判斷預設方向：買入價格、賣出價格等越大越好的指標
+        is_worse = not any(keyword in str(m).lower()
+                           for keyword in ["買入", "賣出", "liquidity", "gap"])
+        dir_cols[m] = st.checkbox(f"{m} 越大越糟？", value=is_worse)
     with cols[1]:
         w_cols[m] = st.slider(
-            f"{m} 權重", min_value=0.0, max_value=1.0, value=0.2, step=0.01, key=f"w_{m}")
+            f"{m} 權重", min_value=0.0, max_value=1.0, value=1.0/len(metrics), step=0.01, key=f"w_{m}")
 
 # 權重正規化
 w_sum = sum(w_cols.values())
@@ -297,9 +314,42 @@ except Exception as e:
     st.stop()
 
 # 保留有選取的指標 & 轉 float
+conversion_info = []
 for m in metrics:
+    if m not in df.columns:
+        st.error(f"❌ 指標 '{m}' 不在資料欄位中！")
+        st.stop()
+
+    original_values = df[m].copy()
     df[m] = pd.to_numeric(df[m], errors="coerce")
+    valid_count = df[m].notna().sum()
+    total_count = len(df[m])
+
+    conversion_info.append({
+        "欄位": m,
+        "有效數值": valid_count,
+        "總筆數": total_count,
+        "轉換率": f"{valid_count/total_count*100:.1f}%" if total_count > 0 else "0%"
+    })
+
+# 顯示轉換資訊（展開查看）
+with st.expander("📊 查看資料轉換詳情"):
+    st.dataframe(pd.DataFrame(conversion_info), use_container_width=True)
+    st.caption("所選欄位必須至少有部分有效數值才能進行分析")
+
+df_before = len(df)
 df = df[[date_col] + metrics].dropna().sort_values(by=date_col).reset_index(drop=True)
+df_after = len(df)
+
+# 檢查是否有有效數據
+if len(df) == 0:
+    st.error("❌ 清理後沒有有效數據。")
+    st.error(f"原始資料：{df_before} 筆 → 清理後：{df_after} 筆")
+    st.error("可能原因：")
+    st.error("1. 所選指標欄位包含非數值資料（如文字：「1公克」、「新台幣(TWD)」）")
+    st.error("2. 日期欄位解析失敗")
+    st.info("💡 建議：請在側邊欄重新選擇「僅包含純數字」的欄位（如價格、數量等）")
+    st.stop()
 
 # 方向一致化 & 正規化
 norm_cols = []
