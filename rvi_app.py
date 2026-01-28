@@ -12,7 +12,62 @@ from datetime import datetime, date
 from matplotlib import font_manager as fm
 
 # -------------------------
-# 全域視覺設定 & 字型（微軟正黑體）
+# 全域色彩系統 & 設計規範
+# -------------------------
+COLOR_SCHEME = {
+    # UI 新色盤 - 主色與次要色
+    "ui": {
+        "primary": "#9A0036",              # 紅色 - 品牌主色
+        "secondary": {
+            "pink": "#EEBAC0",             # 粉紅色
+            "purple": "#941C61",           # 紫紅色
+            "white": "#FFFFFF",            # 白色 - 背景主色
+            "light_gray": "#F5F5F5",       # 淺灰色 - 區塊分隔
+            "dark_gray": "#333333"         # 深灰色 - 文字內容
+        },
+        "accent": {
+            "gold": "#FFD700",             # 金色 - 重要資訊和CTA
+            "orange": "#FF8C00"            # 橙色 - 重要資訊和CTA
+        }
+    },
+    # 風險色保留 - 風險等級識別
+    "risk": {
+        "calm": "#10B981",                 # 綠色 - 低風險
+        "neutral": "#F59E0B",              # 黃色 - 中性
+        "alert": "#EF4444",                # 橘紅 - 警示
+        "critical": "#7F1D1D"              # 深紅 - 嚴重
+    }
+}
+
+
+def get_ui_color(path: str, default: str = "#333333") -> str:
+    """
+    快速獲取UI色彩。
+    用法: get_ui_color("primary"), get_ui_color("secondary.pink")
+    """
+    keys = path.split(".")
+    color = COLOR_SCHEME["ui"]
+    for key in keys:
+        if isinstance(color, dict) and key in color:
+            color = color[key]
+        else:
+            return default
+    return color if isinstance(color, str) else default
+
+
+def get_risk_color(vibe: str) -> str:
+    """根據 Vibe 標籤返回風險色彩"""
+    mapping = {
+        "🟢 Calm": COLOR_SCHEME["risk"]["calm"],
+        "🟡 Neutral": COLOR_SCHEME["risk"]["neutral"],
+        "🟠 Alert": COLOR_SCHEME["risk"]["alert"],
+        "🔴 Critical": COLOR_SCHEME["risk"]["critical"]
+    }
+    return mapping.get(vibe, COLOR_SCHEME["ui"]["secondary"]["dark_gray"])
+
+
+# -------------------------
+# 全域視覺設定 & 字型
 # -------------------------
 warnings.filterwarnings(
     "ignore",
@@ -23,10 +78,103 @@ warnings.filterwarnings(
 
 st.set_page_config(
     page_title="Risk Vibe Indicator (RVI) Dashboard", layout="wide")
+
+# 注入全域CSS樣式（在所有其他Streamlit調用前執行）
+GLOBAL_CSS = f"""
+<style>
+    /* 根字體與背景 */
+    html, body, [class*="css"] {{
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Microsoft JhengHei', 'Noto Sans TC', sans-serif !important;
+        background-color: {COLOR_SCHEME['ui']['secondary']['white']};
+        color: {COLOR_SCHEME['ui']['secondary']['dark_gray']};
+    }}
+    
+    /* 主容器背景 */
+    .stApp {{
+        background-color: {COLOR_SCHEME['ui']['secondary']['white']};
+    }}
+    
+    /* 標題樣式 */
+    h1, h2, h3, h4, h5, h6 {{
+        color: {COLOR_SCHEME['ui']['primary']};
+        font-weight: 600;
+    }}
+    
+    /* 文字層級 */
+    p, span, div {{
+        color: {COLOR_SCHEME['ui']['secondary']['dark_gray']};
+    }}
+    
+    /* 卡片容器樣式 */
+    .stMetric, .stContainer {{
+        background-color: {COLOR_SCHEME['ui']['secondary']['white']};
+        border: 1px solid {COLOR_SCHEME['ui']['secondary']['light_gray']};
+        border-radius: 8px;
+        padding: 16px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    }}
+    
+    /* 分隔線 */
+    hr {{
+        border-color: {COLOR_SCHEME['ui']['secondary']['light_gray']};
+        margin: 20px 0;
+    }}
+    
+    /* 按鈕樣式 - 覆蓋Streamlit預設 */
+    .stDownloadButton button, .stButton button {{
+        background-color: {COLOR_SCHEME['ui']['accent']['gold']} !important;
+        color: {COLOR_SCHEME['ui']['secondary']['dark_gray']} !important;
+        border: none !important;
+        border-radius: 6px !important;
+        font-weight: 600 !important;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.08) !important;
+        transition: all 0.2s ease-in-out !important;
+    }}
+    
+    .stDownloadButton button:hover, .stButton button:hover {{
+        background-color: {COLOR_SCHEME['ui']['accent']['orange']} !important;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.12) !important;
+        transform: translateY(-1px) !important;
+    }}
+    
+    /* 側邊欄背景 */
+    [data-testid="stSidebar"] {{
+        background-color: {COLOR_SCHEME['ui']['secondary']['white']};
+    }}
+    
+    /* Expander 樣式 */
+    .streamlit-expanderContent {{
+        background-color: {COLOR_SCHEME['ui']['secondary']['light_gray']};
+        border-radius: 6px;
+    }}
+    
+    /* 複選框和滑塊 */
+    .stCheckbox, .stSlider {{
+        color: {COLOR_SCHEME['ui']['secondary']['dark_gray']};
+    }}
+    
+    /* 指標容器 */
+    .stMetric {{
+        border-left: 4px solid {COLOR_SCHEME['ui']['primary']};
+    }}
+</style>
+"""
+
+st.markdown(GLOBAL_CSS, unsafe_allow_html=True)
+
 sns.set(style="whitegrid")
 mpl.rcParams["axes.unicode_minus"] = False
 mpl.rcParams["pdf.fonttype"] = 42
 mpl.rcParams["ps.fonttype"] = 42
+mpl.rcParams["figure.facecolor"] = COLOR_SCHEME['ui']['secondary']['white']
+mpl.rcParams["axes.facecolor"] = COLOR_SCHEME['ui']['secondary']['light_gray']
+mpl.rcParams["axes.edgecolor"] = COLOR_SCHEME['ui']['secondary']['light_gray']
+mpl.rcParams["text.color"] = COLOR_SCHEME['ui']['secondary']['dark_gray']
+mpl.rcParams["xtick.color"] = COLOR_SCHEME['ui']['secondary']['dark_gray']
+mpl.rcParams["ytick.color"] = COLOR_SCHEME['ui']['secondary']['dark_gray']
+mpl.rcParams["grid.color"] = COLOR_SCHEME['ui']['secondary']['light_gray']
+mpl.rcParams["grid.linestyle"] = "-"
+mpl.rcParams["grid.linewidth"] = 0.5
 
 
 def try_set_chinese_font():
@@ -89,16 +237,6 @@ def heat_to_vibe(h: float) -> str:
         return "🟠 Alert"
     else:
         return "🔴 Critical"
-
-
-def vibe_color(vibe: str) -> str:
-    mapping = {
-        "🟢 Calm": "#10B981",     # 綠
-        "🟡 Neutral": "#F59E0B",  # 黃
-        "🟠 Alert": "#EF4444",    # 橘紅
-        "🔴 Critical": "#7F1D1D"  # 深紅
-    }
-    return mapping.get(vibe, "#6B7280")
 
 
 @st.cache_data
@@ -229,7 +367,11 @@ else:
     df_raw = build_template_df(30)
 
 # 日期欄位與指標選取
-st.sidebar.header("🧭 欄位對映與方向")
+st.sidebar.markdown(
+    f"<hr style='border-color: {COLOR_SCHEME['ui']['secondary']['light_gray']};'>", unsafe_allow_html=True)
+st.sidebar.markdown("### 🧭 欄位對映與方向")
+st.sidebar.markdown(
+    f"<div style='background-color: {COLOR_SCHEME['ui']['secondary']['light_gray']}; padding: 12px; border-radius: 6px;'>", unsafe_allow_html=True)
 all_cols = df_raw.columns.tolist()
 
 # 智能偵測日期欄位
@@ -270,10 +412,16 @@ if len(metrics) == 0:
     st.error("請至少選擇一個指標欄位。")
     st.stop()
 
+st.sidebar.markdown("</div>", unsafe_allow_html=True)
+
 # 每個指標的「越大越糟？」方向與權重
+st.sidebar.markdown(
+    f"<hr style='border-color: {COLOR_SCHEME['ui']['secondary']['light_gray']};'>", unsafe_allow_html=True)
+st.sidebar.markdown(
+    f"<div style='background-color: {COLOR_SCHEME['ui']['accent']['gold']}20; padding: 12px; border-radius: 6px; margin-bottom: 16px;'>", unsafe_allow_html=True)
+st.sidebar.markdown("**📊 指標方向與權重**")
 dir_cols = {}
 w_cols = {}
-st.sidebar.markdown("**指標方向與權重**")
 for m in metrics:
     cols = st.sidebar.columns([1, 1.2])
     with cols[0]:
@@ -292,13 +440,19 @@ if w_sum == 0:
 else:
     weights = {m: w_cols[m] / w_sum for m in metrics}
 
+st.sidebar.markdown("</div>", unsafe_allow_html=True)
 st.sidebar.caption("（權重會自動正規化為總和=1）")
 
 # -------------------------
 # 主區塊：處理、計算、視覺化
 # -------------------------
-st.title("Risk Vibe Indicator (RVI) Dashboard")
-st.write("上傳 Excel → 對映欄位 → 設定方向/權重 → 即時出圖與匯出")
+# 頁面標題 & 說明
+st.markdown(f"""
+<div style='border-bottom: 3px solid {COLOR_SCHEME['ui']['primary']}; padding-bottom: 16px; margin-bottom: 24px;'>
+    <h1 style='margin: 0; color: {COLOR_SCHEME['ui']['primary']};'>📊 Risk Vibe Indicator (RVI) Dashboard</h1>
+    <p style='margin: 8px 0 0 0; color: {COLOR_SCHEME['ui']['secondary']['dark_gray']};'>上傳 Excel → 對映欄位 → 設定方向/權重 → 即時出圖與匯出</p>
+</div>
+""", unsafe_allow_html=True)
 
 # 基本清洗
 df = df_raw.copy()
@@ -383,116 +537,240 @@ if threshold_mode.startswith("歷史分位數"):
 else:
     df["vibe"] = df["risk_heat"].apply(heat_to_vibe)
 
-df["color"] = df["vibe"].apply(vibe_color)
+df["color"] = df["vibe"].apply(get_risk_color)
 
 # 指標貢獻度（最後一天）
 latest = df.iloc[-1]
 contrib = {m: latest[f"{m}_norm"] * weights[m] for m in metrics}
 ser_contrib = pd.Series(contrib).sort_values(ascending=False)
 
-# ---- 上方 KPI 區 ----
-kpi1, kpi2, kpi3 = st.columns(3)
-with kpi1:
-    st.metric("最新日期", latest[date_col].date().strftime("%Y-%m-%d"))
-with kpi2:
-    st.metric("Risk Heat", f"{latest['risk_heat']:.3f}")
-with kpi3:
-    st.markdown(f"**Vibe**")
-    st.markdown(
-        f"<div style='padding:8px 12px;background:{vibe_color(latest['vibe'])};color:white;border-radius:6px;width:120px;text-align:center'>{latest['vibe']}</div>",
-        unsafe_allow_html=True
-    )
+# ---- 上方 KPI 區（卡片式） ----
+st.markdown("### 📈 即時指標")
+kpi_col1, kpi_col2, kpi_col3 = st.columns(3)
 
-# ---- 圖 1：色帶圖 ----
-fig1, ax1 = plt.subplots(figsize=(10, 2.2))
-ax1.bar(df[date_col].dt.strftime("%Y-%m-%d"), [1] *
-        len(df), color=df["color"], edgecolor="none")
+with kpi_col1:
+    st.markdown(f"""
+    <div style='
+        background-color: {COLOR_SCHEME['ui']['secondary']['white']};
+        border: 2px solid {COLOR_SCHEME['ui']['primary']};
+        border-radius: 8px;
+        padding: 20px;
+        text-align: center;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    '>
+        <div style='color: {COLOR_SCHEME['ui']['secondary']['dark_gray']}; font-size: 14px; font-weight: 600; margin-bottom: 8px;'>最新日期</div>
+        <div style='color: {COLOR_SCHEME['ui']['primary']}; font-size: 24px; font-weight: 700;'>{latest[date_col].date().strftime('%Y-%m-%d')}</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+with kpi_col2:
+    st.markdown(f"""
+    <div style='
+        background-color: {COLOR_SCHEME['ui']['secondary']['white']};
+        border: 2px solid {COLOR_SCHEME['ui']['primary']};
+        border-radius: 8px;
+        padding: 20px;
+        text-align: center;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    '>
+        <div style='color: {COLOR_SCHEME['ui']['secondary']['dark_gray']}; font-size: 14px; font-weight: 600; margin-bottom: 8px;'>Risk Heat Score</div>
+        <div style='color: {COLOR_SCHEME['ui']['primary']}; font-size: 24px; font-weight: 700;'>{latest['risk_heat']:.3f}</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+with kpi_col3:
+    vibe_label = latest['vibe']
+    vibe_bg = get_risk_color(vibe_label)
+    st.markdown(f"""
+    <div style='
+        background-color: {COLOR_SCHEME['ui']['secondary']['white']};
+        border: 2px solid {COLOR_SCHEME['ui']['primary']};
+        border-radius: 8px;
+        padding: 20px;
+        text-align: center;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    '>
+        <div style='color: {COLOR_SCHEME['ui']['secondary']['dark_gray']}; font-size: 14px; font-weight: 600; margin-bottom: 8px;'>當前 Vibe</div>
+        <div style='background-color: {vibe_bg}; color: {COLOR_SCHEME['ui']['secondary']['white']}; padding: 8px 16px; border-radius: 6px; font-size: 18px; font-weight: 700; display: inline-block;'>{vibe_label}</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+st.markdown("")  # 空行分隔
+
+# ---- 圖 1：色帶圖（卡片） ----
+st.markdown("### 📊 Bank Risk Vibe Indicator（每日氛圍色帶）")
+st.markdown(
+    f"<div style='background-color: {COLOR_SCHEME['ui']['secondary']['white']}; border: 1px solid {COLOR_SCHEME['ui']['secondary']['light_gray']}; border-radius: 8px; padding: 16px;'>", unsafe_allow_html=True)
+
+fig1, ax1 = plt.subplots(figsize=(12, 2.5))
+ax1.bar(range(len(df)), [1] * len(df),
+        color=df["color"].tolist(), edgecolor="none", width=0.95)
+ax1.set_xticks(range(0, len(df), max(1, len(df)//10)))
+ax1.set_xticklabels([df[date_col].iloc[i].strftime("%Y-%m-%d") if i < len(df) else ""
+                     for i in range(0, len(df), max(1, len(df)//10))], rotation=45, ha="right", fontsize=9)
 ax1.set_yticks([])
-ax1.set_title("Bank Risk Vibe Indicator（每日氛圍色帶）")
-plt.xticks(rotation=75, ha="right")
+ax1.set_ylabel("")
+ax1.set_title("每日風險等級色帶（Calm → Neutral → Alert → Critical）",
+              fontsize=12, fontweight="bold", pad=12)
+ax1.spines['top'].set_visible(False)
+ax1.spines['right'].set_visible(False)
+ax1.spines['left'].set_visible(False)
 plt.tight_layout()
 st.pyplot(fig1, use_container_width=True)
 img1 = to_bytes_png(fig1)
 plt.close(fig1)
 
-# ---- 圖 2：熱度趨勢 ----
-fig2, ax2 = plt.subplots(figsize=(10, 4))
+st.markdown("</div>", unsafe_allow_html=True)
+
+# ---- 圖 2：熱度趨勢（卡片） ----
+st.markdown("### 📈 Risk Heat 趨勢（含 Vibe 區間）")
+st.markdown(
+    f"<div style='background-color: {COLOR_SCHEME['ui']['secondary']['white']}; border: 1px solid {COLOR_SCHEME['ui']['secondary']['light_gray']}; border-radius: 8px; padding: 16px;'>", unsafe_allow_html=True)
+
+fig2, ax2 = plt.subplots(figsize=(12, 5))
 # 背景區間
 if threshold_mode.startswith("歷史分位數"):
-    ax2.axhspan(0.0, df["risk_heat"].min(), facecolor="#10B981", alpha=0.08)
+    ax2.axhspan(0.0, df["risk_heat"].min(),
+                facecolor=COLOR_SCHEME['risk']['calm'], alpha=0.08)
     ax2.axhspan(df["risk_heat"].min(), df["risk_heat"].quantile(
-        0.25), facecolor="#10B981", alpha=0.12, label="Calm")
+        0.25), facecolor=COLOR_SCHEME['risk']['calm'], alpha=0.12, label="Calm")
     ax2.axhspan(df["risk_heat"].quantile(0.25), df["risk_heat"].quantile(
-        0.5), facecolor="#F59E0B", alpha=0.12, label="Neutral")
+        0.5), facecolor=COLOR_SCHEME['risk']['neutral'], alpha=0.12, label="Neutral")
     ax2.axhspan(df["risk_heat"].quantile(0.5), df["risk_heat"].quantile(
-        0.75), facecolor="#EF4444", alpha=0.10, label="Alert")
+        0.75), facecolor=COLOR_SCHEME['risk']['alert'], alpha=0.10, label="Alert")
     ax2.axhspan(df["risk_heat"].quantile(0.75), 1.0,
-                facecolor="#7F1D1D", alpha=0.10, label="Critical")
+                facecolor=COLOR_SCHEME['risk']['critical'], alpha=0.10, label="Critical")
 else:
-    ax2.axhspan(0.00, 0.25, facecolor="#10B981", alpha=0.12, label="Calm")
-    ax2.axhspan(0.25, 0.50, facecolor="#F59E0B", alpha=0.12, label="Neutral")
-    ax2.axhspan(0.50, 0.75, facecolor="#EF4444", alpha=0.10, label="Alert")
-    ax2.axhspan(0.75, 1.00, facecolor="#7F1D1D", alpha=0.10, label="Critical")
+    ax2.axhspan(
+        0.00, 0.25, facecolor=COLOR_SCHEME['risk']['calm'], alpha=0.12, label="Calm")
+    ax2.axhspan(
+        0.25, 0.50, facecolor=COLOR_SCHEME['risk']['neutral'], alpha=0.12, label="Neutral")
+    ax2.axhspan(
+        0.50, 0.75, facecolor=COLOR_SCHEME['risk']['alert'], alpha=0.10, label="Alert")
+    ax2.axhspan(
+        0.75, 1.00, facecolor=COLOR_SCHEME['risk']['critical'], alpha=0.10, label="Critical")
 
-ax2.plot(df[date_col], df["risk_heat"], color="#111827",
-         linewidth=2, marker="o", markersize=4)
+ax2.plot(range(len(df)), df["risk_heat"].values, color=COLOR_SCHEME['ui']['primary'],
+         linewidth=2.5, marker="o", markersize=5, markeredgecolor=COLOR_SCHEME['ui']['secondary']['white'],
+         markeredgewidth=1.5, zorder=3)
 ax2.set_ylim(0, 1)
-ax2.set_ylabel("Risk Heat（0~1）")
-ax2.set_title("Risk Heat 趨勢（含 Vibe 區間）")
-ax2.grid(True, axis="y", alpha=0.3)
+ax2.set_xticks(range(0, len(df), max(1, len(df)//10)))
+ax2.set_xticklabels([df[date_col].iloc[i].strftime("%Y-%m-%d") if i < len(df) else ""
+                     for i in range(0, len(df), max(1, len(df)//10))], rotation=45, ha="right", fontsize=9)
+ax2.set_ylabel("Risk Heat（0~1）", fontweight="bold", fontsize=11)
+ax2.set_title("風險熱度趨勢分析", fontsize=12, fontweight="bold", pad=12)
+ax2.grid(True, axis="y", alpha=0.3, linestyle="--", linewidth=0.5)
+ax2.legend(loc="upper left", framealpha=0.95, fontsize=10)
+ax2.spines['top'].set_visible(False)
+ax2.spines['right'].set_visible(False)
 plt.tight_layout()
 st.pyplot(fig2, use_container_width=True)
 img2 = to_bytes_png(fig2)
 plt.close(fig2)
 
-# ---- 圖 3：當日貢獻度 ----
-fig3, ax3 = plt.subplots(figsize=(6, 3.5))
-sns.barplot(x=ser_contrib.values, y=ser_contrib.index, ax=ax3, color="#374151")
-ax3.set_title(f"當日（{latest[date_col].date()}）風險熱度貢獻度")
-ax3.set_xlabel("貢獻度")
+st.markdown("</div>", unsafe_allow_html=True)
+
+# ---- 圖 3：當日貢獻度（卡片） ----
+st.markdown("### 📊 當日風險熱度貢獻度分析")
+st.markdown(
+    f"<div style='background-color: {COLOR_SCHEME['ui']['secondary']['white']}; border: 1px solid {COLOR_SCHEME['ui']['secondary']['light_gray']}; border-radius: 8px; padding: 16px;'>", unsafe_allow_html=True)
+
+fig3, ax3 = plt.subplots(figsize=(8, 4))
+bars = ax3.barh(ser_contrib.index, ser_contrib.values,
+                color=COLOR_SCHEME['ui']['primary'], edgecolor="none", height=0.6)
+# 添加數值標籤
+for i, (idx, val) in enumerate(ser_contrib.items()):
+    ax3.text(val + 0.01, i, f"{val:.3f}",
+             va="center", fontsize=10, fontweight="bold")
+ax3.set_xlabel("貢獻度", fontweight="bold", fontsize=11)
 ax3.set_ylabel("")
+ax3.set_title(f"當日（{latest[date_col].date()}）風險熱度貢獻度排名",
+              fontsize=12, fontweight="bold", pad=12)
+ax3.set_xlim(0, max(ser_contrib.values) * 1.15)
+ax3.spines['top'].set_visible(False)
+ax3.spines['right'].set_visible(False)
+ax3.grid(True, axis="x", alpha=0.3, linestyle="--", linewidth=0.5)
 plt.tight_layout()
 st.pyplot(fig3, use_container_width=False)
 img3 = to_bytes_png(fig3)
 plt.close(fig3)
 
-# ---- 匯出 ----
-st.subheader("下載結果")
+st.markdown("</div>", unsafe_allow_html=True)
+
+# ---- 匯出操作區 ----
+st.markdown("### 💾 下載結果")
+st.markdown(
+    f"<div style='background-color: {COLOR_SCHEME['ui']['secondary']['light_gray']}; padding: 16px; border-radius: 8px; margin-bottom: 16px;'>", unsafe_allow_html=True)
+
 col_d1, col_d2, col_d3, col_d4 = st.columns(4)
 with col_d1:
     # 處理後資料
     out_csv = df.copy()
     out_csv[date_col] = out_csv[date_col].dt.strftime("%Y-%m-%d")
-    st.download_button("⬇️ 下載處理後 CSV", data=out_csv.to_csv(index=False).encode("utf-8-sig"),
-                       file_name="risk_vibe_result.csv", mime="text/csv")
+    st.download_button(
+        label="⬇️ CSV 分析結果",
+        data=out_csv.to_csv(index=False).encode("utf-8-sig"),
+        file_name="risk_vibe_result.csv",
+        mime="text/csv"
+    )
 with col_d2:
-    st.download_button("⬇️ 色帶圖 PNG", data=img1,
-                       file_name="risk_vibe_band.png", mime="image/png")
+    st.download_button(
+        label="⬇️ 色帶圖",
+        data=img1,
+        file_name="risk_vibe_band.png",
+        mime="image/png"
+    )
 with col_d3:
-    st.download_button("⬇️ 趨勢圖 PNG", data=img2,
-                       file_name="risk_heat_trend.png", mime="image/png")
+    st.download_button(
+        label="⬇️ 趨勢圖",
+        data=img2,
+        file_name="risk_heat_trend.png",
+        mime="image/png"
+    )
 with col_d4:
-    st.download_button("⬇️ 貢獻度圖 PNG", data=img3,
-                       file_name="risk_heat_contrib.png", mime="image/png")
+    st.download_button(
+        label="⬇️ 貢獻度圖",
+        data=img3,
+        file_name="risk_heat_contrib.png",
+        mime="image/png"
+    )
 
-st.divider()
+st.markdown("</div>", unsafe_allow_html=True)
+
+st.markdown("---")
 
 # ---- 模板下載 & 原始資料檢視 ----
-c1, c2 = st.columns([1, 1])
-with c1:
-    st.subheader("下載 Excel 模板")
+col_tmpl, col_preview = st.columns([1, 1])
+
+with col_tmpl:
+    st.markdown("### 📋 下載 Excel 模板")
+    st.markdown(
+        f"<div style='background-color: {COLOR_SCHEME['ui']['secondary']['white']}; border: 1px solid {COLOR_SCHEME['ui']['secondary']['light_gray']}; border-radius: 8px; padding: 16px;'>", unsafe_allow_html=True)
     df_tmpl = build_template_df(30)
     buf = io.BytesIO()
     with pd.ExcelWriter(buf, engine="openpyxl") as writer:
         df_tmpl.to_excel(writer, index=False, sheet_name="risk_metrics")
     buf.seek(0)
-    st.download_button("⬇️ 下載範例模板.xlsx", data=buf.getvalue(), file_name="risk_metrics_template.xlsx",
-                       mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    st.download_button(
+        label="⬇️ 範例模板.xlsx",
+        data=buf.getvalue(),
+        file_name="risk_metrics_template.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+    st.markdown("</div>", unsafe_allow_html=True)
 
-with c2:
-    st.subheader("原始資料預覽")
-    st.dataframe(df_raw.head(20), use_container_width=True)
+with col_preview:
+    st.markdown("### 🔍 原始資料預覽")
+    st.markdown(
+        f"<div style='background-color: {COLOR_SCHEME['ui']['secondary']['white']}; border: 1px solid {COLOR_SCHEME['ui']['secondary']['light_gray']}; border-radius: 8px; padding: 16px;'>", unsafe_allow_html=True)
+    st.dataframe(df_raw.head(10), use_container_width=True, height=300)
+    st.markdown("</div>", unsafe_allow_html=True)
 
+# ---- 處理後資料詳細檢視 ----
 if show_table:
-    st.subheader("處理後資料（含標準化/分數/Vibe）")
-    st.dataframe(df, use_container_width=True)
+    st.markdown("---")
+    st.markdown("### 📊 處理後完整資料表")
+    st.markdown(
+        f"<div style='background-color: {COLOR_SCHEME['ui']['secondary']['white']}; border: 1px solid {COLOR_SCHEME['ui']['secondary']['light_gray']}; border-radius: 8px; padding: 16px;'>", unsafe_allow_html=True)
+    st.dataframe(df, use_container_width=True, height=400)
+    st.markdown("</div>", unsafe_allow_html=True)
