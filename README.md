@@ -4,7 +4,7 @@ Streamlit 建立的金融風險儀表板。上傳 Excel 後設定日期欄位、
 
 ## 專案概要
 
-- 架構：單一 Streamlit 應用 [rvi_app.py](rvi_app.py)。
+- 架構：單一 Streamlit 應用 [main.py](main.py)。
 - 核心色彩系統：UI 主題色（紅色系主色、粉紅色、紫紅色）+ 風險等級色（綠/黃/橘紅/深紅）。
 - 流程：上傳/讀取 Excel → 日期解析 → 指標選取 → 方向設定（越大越糟/越小越糟）與權重調整 → 方向一致化/正規化 → 加權合併得到 risk heat → 依門檻映射 Vibe（🟢 Calm/🟡 Neutral/🟠 Alert/🔴 Critical） → 計算驗證 → 視覺化展示與匯出。
 - 主要函式：
@@ -35,7 +35,7 @@ Streamlit 建立的金融風險儀表板。上傳 Excel 後設定日期欄位、
 
 1. 啟動服務：
    ```sh
-   streamlit run rvi_app.py
+   streamlit run main.py
    ```
 2. 瀏覽器開啟 http://localhost:8501（預設），依介面指示上傳 Excel 或使用示範資料。
 
