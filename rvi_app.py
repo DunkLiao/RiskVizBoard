@@ -85,7 +85,8 @@ if os.path.exists("logo.png"):
     with col_logo:
         st.image("logo.png", width=120)
     with col_title:
-        st.markdown("<h1 style='margin-top: 20px;'>Risk Indicator (RI) Dashboard</h1>", unsafe_allow_html=True)
+        st.markdown(
+            "<h1 style='margin-top: 20px;'>Risk Indicator (RI) Dashboard</h1>", unsafe_allow_html=True)
 else:
     st.title("Risk Indicator (RI) Dashboard")
 
@@ -220,6 +221,7 @@ font_msg = try_set_chinese_font()
 
 
 def normalize_minmax(series: pd.Series) -> pd.Series:
+    """將數值正規化到 0-1 範圍"""
     s = series.astype(float)
     # 檢查是否為空陣列或全為 NaN
     if len(s) == 0 or s.isna().all():
@@ -233,9 +235,17 @@ def normalize_minmax(series: pd.Series) -> pd.Series:
 def apply_direction(series: pd.Series, larger_is_worse: bool) -> pd.Series:
     """
     方向一致化：回傳「數值越大 = 越糟」的尺度
-    如果 larger_is_worse=False，代表數值越大越好 → 先乘以 -1 反向，再做正規化
+    - larger_is_worse=True：表示「越大越糟」，直接使用原值
+    - larger_is_worse=False：表示「越小越糟」，需要反向（用最大值減去該值）
     """
-    return series if larger_is_worse else -series
+    s = series.astype(float)
+    if larger_is_worse:
+        # 越大越糟：直接返回
+        return s
+    else:
+        # 越小越糟：反向（用最大值減原值，使小值變大）
+        max_val = np.nanmax(s)
+        return max_val - s
 
 
 def heat_to_vibe(h: float) -> str:
@@ -399,12 +409,19 @@ metric_candidates = [c for c in all_cols if c != date_col]
 numeric_cols = []
 for col in metric_candidates:
     try:
-        # 嘗試轉換前幾筆資料，判斷是否為數值欄位
-        test_series = pd.to_numeric(df_raw[col].head(10), errors='coerce')
-        # 檢查轉換後至少有一半以上的資料是有效數字
+        # 嘗試轉換所有資料，判斷是否為數值欄位
+        test_series = pd.to_numeric(df_raw[col], errors='coerce')
+        # 檢查轉換後至少有 80% 以上的資料是有效數字（排除文字欄位如「新台幣(TWD)」、「1公克」）
         valid_count = test_series.notna().sum()
-        if valid_count >= len(test_series) * 0.5:
-            numeric_cols.append(col)
+        total_count = len(test_series)
+        valid_ratio = valid_count / total_count if total_count > 0 else 0
+
+        # 同時檢查數值的合理性（數值範圍應該有變化，不是全部相同）
+        if valid_ratio >= 0.8:
+            unique_values = test_series.dropna().unique()
+            # 如果有超過1個不同的數值，才算是有效的數值欄位
+            if len(unique_values) > 1:
+                numeric_cols.append(col)
     except:
         pass
 
@@ -430,18 +447,29 @@ st.sidebar.markdown(
 st.sidebar.markdown(
     f"<div style='background-color: {COLOR_SCHEME['ui']['accent']['gold']}20; padding: 12px; border-radius: 6px; margin-bottom: 16px;'>", unsafe_allow_html=True)
 st.sidebar.markdown("**📊 指標方向與權重**")
+st.sidebar.info("💡 方向說明：\n- 🔴 **越大越糟**：數值越高 = 風險越高（如價格上漲、風險指標上升）\n- 🟢 **越小越糟**：數值越低 = 風險越高（如評分、充足率、流動性）")
+
 dir_cols = {}
 w_cols = {}
 for m in metrics:
-    cols = st.sidebar.columns([1, 1.2])
+    st.sidebar.markdown(f"**{m}**")
+    cols = st.sidebar.columns([1.5, 1.2])
+    
     with cols[0]:
-        # 智能判斷預設方向：買入價格、賣出價格等越大越好的指標
-        is_worse = not any(keyword in str(m).lower()
-                           for keyword in ["買入", "賣出", "liquidity", "gap"])
-        dir_cols[m] = st.checkbox(f"{m} 越大越糟？", value=is_worse)
+        # 使用 Radio Button 讓用戶明確選擇方向
+        direction = st.radio(
+            "方向選擇",
+            options=["🔴 越大越糟", "🟢 越小越糟"],
+            index=0,
+            key=f"dir_{m}",
+            label_visibility="collapsed"
+        )
+        dir_cols[m] = direction.startswith("🔴")
+    
     with cols[1]:
         w_cols[m] = st.slider(
-            f"{m} 權重", min_value=0.0, max_value=1.0, value=1.0/len(metrics), step=0.01, key=f"w_{m}")
+            f"權重", min_value=0.0, max_value=1.0, value=1.0/len(metrics), step=0.01, key=f"w_{m}",
+            label_visibility="collapsed")
 
 # 權重正規化
 w_sum = sum(w_cols.values())
@@ -485,25 +513,41 @@ for m in metrics:
         st.stop()
 
     original_values = df[m].copy()
+    # 取前5筆原始值作為範例
+    sample_original = original_values.head(5).tolist()
+    
     df[m] = pd.to_numeric(df[m], errors="coerce")
     valid_count = df[m].notna().sum()
     total_count = len(df[m])
-
+    
+    # 取轉換後前5筆有效值作為範例
+    sample_converted = df[m].dropna().head(5).tolist()
+    
     conversion_info.append({
         "欄位": m,
         "有效數值": valid_count,
         "總筆數": total_count,
-        "轉換率": f"{valid_count/total_count*100:.1f}%" if total_count > 0 else "0%"
+        "轉換率": f"{valid_count/total_count*100:.1f}%" if total_count > 0 else "0%",
+        "原始範例": str(sample_original[:3]),
+        "轉換範例": str(sample_converted[:3]) if len(sample_converted) > 0 else "無有效值"
     })
 
 # 顯示轉換資訊（展開查看）
-with st.expander("📊 查看資料轉換詳情"):
+with st.expander("📊 查看資料轉換詳情", expanded=True):
     st.dataframe(pd.DataFrame(conversion_info), use_container_width=True)
     st.caption("所選欄位必須至少有部分有效數值才能進行分析")
 
 df_before = len(df)
+
+# 先顯示清理前的數據範例
+st.info(f"📋 清理前數據：共 {df_before} 筆")
+with st.expander("🔍 查看清理前數據範例（前10筆）"):
+    st.dataframe(df[[date_col] + metrics].head(10), use_container_width=True)
+
 df = df[[date_col] + metrics].dropna().sort_values(by=date_col).reset_index(drop=True)
 df_after = len(df)
+
+st.success(f"✅ 資料清理完成：{df_before} 筆 → {df_after} 筆（移除 {df_before - df_after} 筆空值）")
 
 # 檢查是否有有效數據
 if len(df) == 0:
@@ -515,14 +559,68 @@ if len(df) == 0:
     st.info("💡 建議：請在側邊欄重新選擇「僅包含純數字」的欄位（如價格、數量等）")
     st.stop()
 
+# 顯示數據統計摘要
+with st.expander("📊 數據統計摘要"):
+    stats_df = df[metrics].describe()
+    st.dataframe(stats_df, use_container_width=True)
+
 # 方向一致化 & 正規化
 norm_cols = []
+norm_debug_info = []
 for m in metrics:
-    s_dir = apply_direction(df[m], larger_is_worse=dir_cols[m])
+    # 第一步：應用方向
+    s_original = df[m].copy().astype(float)
+    s_dir = apply_direction(s_original, larger_is_worse=dir_cols[m])
+    
+    # 第二步：正規化
     s_norm = normalize_minmax(s_dir)
     norm_col = f"{m}_norm"
     df[norm_col] = s_norm
     norm_cols.append(norm_col)
+    
+    # 收集診斷信息
+    direction_text = "🔴 越大越糟" if dir_cols[m] else "🟢 越小越糟"
+    
+    norm_debug_info.append({
+        "指標": m,
+        "方向": direction_text,
+        "原始範圍": f"{s_original.min():.0f} ~ {s_original.max():.0f}",
+        "最新值": f"{s_original.iloc[-1]:.0f}",
+        "風險值": f"{s_norm.iloc[-1]:.3f}",
+        "權重": f"{weights[m]:.1%}",
+        "貢獻度": f"{s_norm.iloc[-1] * weights[m]:.3f}"
+    })
+
+# 顯示正規化診斷信息
+st.markdown("### 🔬 風險計算診斷")
+st.markdown(
+    f"<div style='background-color: {COLOR_SCHEME['ui']['secondary']['light_gray']}; padding: 16px; border-radius: 8px;'>", unsafe_allow_html=True)
+
+# 1. 原始數據統計
+st.write("**第1步：原始數據**")
+debug_df = pd.DataFrame(norm_debug_info)
+st.dataframe(debug_df, use_container_width=True)
+
+# 2. 顯示方向轉換的影響
+st.write("**第2步：方向轉換 + 正規化詳解**")
+direction_detail = []
+for m in metrics:
+    s_original = df[m].copy().astype(float)
+    s_dir = apply_direction(s_original, larger_is_worse=dir_cols[m])
+    s_norm = normalize_minmax(s_dir)
+    
+    direction_detail.append({
+        "指標": m,
+        "原始最新值": f"{s_original.iloc[-1]:.0f}",
+        "方向轉換後": f"{s_dir.iloc[-1]:.0f}",
+        "正規化後": f"{s_norm.iloc[-1]:.3f}",
+        "權重": f"{weights[m]:.1%}",
+        "加權貢獻": f"{s_norm.iloc[-1] * weights[m]:.3f}"
+    })
+
+st.dataframe(pd.DataFrame(direction_detail), use_container_width=True)
+
+st.markdown("</div>", unsafe_allow_html=True)
 
 # 風險熱度分數
 risk_heat = np.zeros(len(df))
@@ -549,8 +647,42 @@ else:
 
 df["color"] = df["vibe"].apply(get_risk_color)
 
-# 指標貢獻度（最後一天）
+# 獲取最新一天的數據（在 vibe 和 color 都建立之後）
 latest = df.iloc[-1]
+
+# 驗證權重和貢獻度（在 latest 定義之後）
+with st.expander("📋 計算驗證 - 當日（2026-01-28）風險計算過程", expanded=True):
+    st.write("**單個指標貢獻度計算：**")
+    verify_data = []
+    total_heat = 0
+    for m in metrics:
+        norm_value = latest[f"{m}_norm"]
+        weight = weights[m]
+        contrib = norm_value * weight
+        total_heat += contrib
+        verify_data.append({
+            "指標": m,
+            "正規化值": f"{norm_value:.3f}",
+            "權重": f"{weight:.1%}",
+            "貢獻度": f"{contrib:.3f}",
+            "計算": f"{norm_value:.3f} × {weight:.1%} = {contrib:.3f}"
+        })
+    
+    st.dataframe(pd.DataFrame(verify_data), use_container_width=True)
+    
+    st.divider()
+    col_v1, col_v2, col_v3 = st.columns(3)
+    with col_v1:
+        st.metric("總貢獻度（加總）", f"{total_heat:.3f}")
+    with col_v2:
+        st.metric("系統計算的 Risk Heat", f"{latest['risk_heat']:.3f}")
+    with col_v3:
+        match = "✅ 相符" if abs(total_heat - latest["risk_heat"]) < 0.001 else "❌ 不符"
+        st.metric("計算驗證", match)
+    
+    st.caption(f"💡 如果計算驗證顯示「❌ 不符」，表示有計算邏輯錯誤")
+
+# 指標貢獻度（最後一天）
 contrib = {m: latest[f"{m}_norm"] * weights[m] for m in metrics}
 ser_contrib = pd.Series(contrib).sort_values(ascending=False)
 
